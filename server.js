@@ -1,43 +1,77 @@
+// server.js
 const express = require("express");
-const dotenv=require("dotenv");
+const dotenv = require("dotenv");
 const cors = require("cors");
 const mongoose = require("mongoose");
 const http = require("http");
 const socketio = require("socket.io");
+
 const userRouter = require("./routes/userRoutes");
-const socketIo = require("./socket");
 const groupRouter = require("./routes/groupRoutes");
 const messageRouter = require("./routes/messageRoutes");
+const socketIo = require("./socket");
+
 dotenv.config();
 
-const app =express();
-const server=http.createServer(app);
+const app = express();
+
+// ✅ Step 1: Define trusted origins
+const allowedOrigins = [
+  "https://mern-chat-application-vyom.netlify.app",
+  "http://localhost:5173",
+];
+
+// ✅ Step 2: Safe CORS setup (handles mobile, Safari)
+const corsOptions = {
+  origin: [
+    "https://mern-chat-application-vyom.netlify.app",
+    "http://localhost:5173"
+  ],
+  credentials: true,
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  optionsSuccessStatus: 200,
+};
+
+
+app.use(cors(corsOptions));
+app.use(express.json());
+
+// ✅ Step 3: Create server and socket.io
+const server = http.createServer(app);
 const io = socketio(server, {
   cors: {
-    origin: ["http://localhost:5173"],
+    origin: allowedOrigins,
     methods: ["GET", "POST"],
     credentials: true,
   },
+  allowEIO3: true              // ✅ Adds support for older clients
 });
 
-//middleware
-app.use(cors());
-app.use(express.json());
-//connect to DB
+// ✅ Step 4: DB connection
 mongoose
-  .connect(process.env.MONGO_URL)
-  .then(() => console.log("Connected to DB"))
-  .catch((err) => console.log("Mongodb connected failed", err));
+  .connect(process.env.MONGO_URL, {
+    useNewUrlParser: true,
+    useUnifiedTopology: true,
+  })
+  .then(() => console.log("✅ Connected to MongoDB"))
+  .catch((err) => console.error("❌ MongoDB connection error:", err));
 
-//Initialize
-socketIo(io);
+// ✅ Step 5: Basic route
+app.get("/", (req, res) => {
+  res.send("API is running...");
+});
 
-//our routes
+// ✅ Step 6: Routes
 app.use("/api/users", userRouter);
 app.use("/api/groups", groupRouter);
 app.use("/api/messages", messageRouter);
 
+// ✅ Step 7: Socket.io initialization
+socketIo(io);
 
-//start the server
+// ✅ Step 8: Start server
 const PORT = process.env.PORT || 3000;
-server.listen(PORT, console.log("Server is up and running on port", PORT));
+server.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});

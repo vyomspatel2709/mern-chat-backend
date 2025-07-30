@@ -1,83 +1,50 @@
-const socketsIO=(io)=>{
-
-//Store connected users with their room information using socket.id as their key
-  const connectedUsers = new Map()
-io.on("connection", (socket) => {
-    //Get user from authentication
+// socket.js
+module.exports = (io) => {
+  io.on("connection", (socket) => {
     const user = socket.handshake.auth.user;
-    console.log("User connected", user?.username);
 
-    //!START: Join room Handler
-    socket.on("join room", (groupId) => {
-      //Add socket to the specified room
-      socket.join(groupId);
-      //Store user and room info in connectedUsers map
-      connectedUsers.set(socket.id, { user, room: groupId });
-      //Get list of all users currently in the room
-      const usersInRoom = Array.from(connectedUsers.values())
-        .filter((u) => u.room === groupId)
-        .map((u) => u.user);
-      // Emit updated users list to all clients in the room
-      io.in(groupId).emit("users in room", usersInRoom);
-      // Broadcast join notification to all other users in the room
-      socket.to(groupId).emit("notification", {
+    if (!user || !user._id) {
+      console.log("❌ Invalid user tried to connect");
+      socket.disconnect();
+      return;
+    }
+
+    console.log(`✅ ${user.username} connected`);
+
+    socket.on("join room", (roomId) => {
+      socket.join(roomId);
+      socket.to(roomId).emit("notification", {
         type: "USER_JOINED",
-        message: `${user?.username} has joined`,
-        user: user,
+        message: `${user.username} joined the chat`,
       });
-    });
-    //!END:Join room Handler
 
-    //!START: Leave room Handler
-    //Triggered when user manually leaves a room
-    socket.on("leave room", (groupId) => {
-      console.log(`${user?.username} leaving room:`, groupId);
-      //Remove socket from the room
-      socket.leave(groupId);
-      if (connectedUsers.has(socket.id)) {
-        //Remove user from connected users and notify others
-        connectedUsers.delete(socket.id);
-        socket.to(groupId).emit("user left", user?._id);
-      }
-    });
-    //!END:Leave room Handler
+      // Send current users in room
+      const usersInRoom = Array.from(io.sockets.adapter.rooms.get(roomId) || [])
+        .map((id) => io.sockets.sockets.get(id)?.handshake.auth.user)
+        .filter(Boolean);
 
-    //!START: New Message Handler
-    //Triggered when user sends a new message
-    socket.on("new message", (message) => {
-      // Broadcast message to all other users in the room
-      socket.to(message.groupId).emit("message received", message);
+      io.to(roomId).emit("users in room", usersInRoom);
     });
-    //!END:New Message Handler
 
-    //!START: Disconnect Handler
-    //Triggered when user closes the connection
-    socket.on("disconnect", () => {
-      console.log(`${user?.username} disconnected`);
-      if (connectedUsers.has(socket.id)) {
-        // Get user's room info before removing
-        const userData = connectedUsers.get(socket.id);
-        //Notify others in the room about user's departure
-        socket.to(userData.room).emit("user left", user?._id);
-        //Remove user from connected users
-        connectedUsers.delete(socket.id);
-      }
+    socket.on("leave room", (roomId) => {
+      socket.leave(roomId);
+      socket.to(roomId).emit("user left", user._id);
     });
-    //!END:Disconnect Handler
-    
-    //!START: Typing Indicator
-    //Triggered when user starts typing
+
     socket.on("typing", ({ groupId, username }) => {
-      //Broadcast typing status to other users in the room
       socket.to(groupId).emit("user typing", { username });
     });
 
     socket.on("stop typing", ({ groupId }) => {
-      //Broadcast stop typing status to other users in the room
-      socket.to(groupId).emit("user stop typing", { username: user?.username });
+      socket.to(groupId).emit("user stop typing", { username: user.username });
     });
-    //!END:Typing Indicator
-  });
-}
 
-module.exports=socketsIO;
+    socket.on("new message", (message) => {
+      io.to(message.groupId).emit("message received", message);
+    });
+
+    socket.on("disconnect", () => {
+      console.log(`❌ ${user.username} disconnected`);
+    });
+  });
+};
