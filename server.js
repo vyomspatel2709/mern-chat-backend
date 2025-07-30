@@ -14,6 +14,7 @@ const socketIo = require("./socket");
 dotenv.config();
 
 const app = express();
+app.set("trust proxy", 1); // ✅ for Safari & mobile HTTPS cookies
 
 // ✅ Step 1: Define trusted origins
 const allowedOrigins = [
@@ -21,16 +22,17 @@ const allowedOrigins = [
   "http://localhost:5173",
 ];
 
-// ✅ Step 2: Safe CORS setup (handles mobile, Safari)
 const corsOptions = {
-  origin: [
-    "https://mern-chat-application-vyom.netlify.app",
-    "http://localhost:5173"
-  ],
+  origin: function (origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, origin); // ✅ Echo the origin
+    } else {
+      callback(new Error("Not allowed by CORS"));
+    }
+  },
   credentials: true,
   methods: ["GET", "POST", "PUT", "DELETE"],
   allowedHeaders: ["Content-Type", "Authorization"],
-  optionsSuccessStatus: 200,
 };
 
 
